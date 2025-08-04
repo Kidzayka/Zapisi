@@ -1,21 +1,20 @@
 "use client"
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ArrowUpDown } from "lucide-react"
+import { ArrowUpDown, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface Record {
   _id: string
-  title: string
-  description: string
+  title?: string // Может быть опциональным
+  description?: string // Может быть опциональным
   status: string
   category: string
   date: string
-  participants: string[]
-  // Добавляем новые поля, которые могут прийти из БД
-  name?: string
-  phone?: string
-  email?: string
+  participants?: string[] // Может быть опциональным
+  name?: string // Добавлено
+  phone?: string // Добавлено
+  email?: string // Добавлено
   preferredDate?: string
   preferredTime?: string
   createdAt?: string
@@ -27,9 +26,10 @@ interface RecordsTableProps {
   setSortBy: (key: string) => void
   sortOrder: string
   setSortOrder: (order: string) => void
+  onEdit: (record: Record) => void
 }
 
-export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrder }: RecordsTableProps) {
+export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrder, onEdit }: RecordsTableProps) {
   const handleSort = (key: string) => {
     if (sortBy === key) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc")
@@ -77,22 +77,23 @@ export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrd
               </Button>
             </TableHead>
             <TableHead>Участники</TableHead>
-            <TableHead>Телефон</TableHead> {/* Добавляем столбец для телефона */}
-            <TableHead>Email</TableHead> {/* Добавляем столбец для email */}
+            <TableHead>Телефон</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead className="w-[80px] text-right">Действия</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {records.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="h-24 text-center">
+              <TableCell colSpan={9} className="h-24 text-center">
                 Записи не найдены.
               </TableCell>
             </TableRow>
           ) : (
             records.map((record) => (
               <TableRow key={record._id}>
-                <TableCell className="font-medium">{record.title}</TableCell>
-                <TableCell>{record.description}</TableCell>
+                <TableCell className="font-medium">{record.title || record.name || "N/A"}</TableCell>
+                <TableCell>{record.description || "N/A"}</TableCell>
                 <TableCell>
                   <span
                     className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -109,8 +110,14 @@ export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrd
                 <TableCell>{record.category}</TableCell>
                 <TableCell>{new Date(record.date).toLocaleString()}</TableCell>
                 <TableCell>{record.participants?.join(", ") || record.name || "N/A"}</TableCell>
-                <TableCell>{record.phone || "N/A"}</TableCell> {/* Отображаем телефон */}
-                <TableCell>{record.email || "N/A"}</TableCell> {/* Отображаем email */}
+                <TableCell>{record.phone || "N/A"}</TableCell>
+                <TableCell>{record.email || "N/A"}</TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="icon" onClick={() => onEdit(record)}>
+                    <Edit className="h-4 w-4" />
+                    <span className="sr-only">Редактировать</span>
+                  </Button>
+                </TableCell>
               </TableRow>
             ))
           )}

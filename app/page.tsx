@@ -5,19 +5,37 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RecordsTable } from "@/components/records-table"
-import { AddLessonDialog } from "@/components/add-lesson-dialog"
+import { LessonFormDialog } from "@/components/lesson-form-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { Loader2, PlusCircle } from "lucide-react"
 
+// Определение типа Record для более строгой типизации
+interface Record {
+  _id: string
+  title?: string // Теперь может быть опциональным, если формируется на лету
+  description?: string // Теперь может быть опциональным
+  status: string
+  category: string
+  date: string
+  participants?: string[] // Теперь может быть опциональным
+  name?: string
+  phone?: string
+  email?: string
+  preferredDate?: string // Добавлено
+  preferredTime?: string // Добавлено
+  createdAt?: string
+}
+
 export default function RecordsDashboard() {
-  const [records, setRecords] = useState([])
+  const [records, setRecords] = useState<Record[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [sortBy, setSortBy] = useState("date")
   const [sortOrder, setSortOrder] = useState("asc")
   const [loading, setLoading] = useState(true)
-  const [isAddLessonDialogOpen, setIsAddLessonDialogOpen] = useState(false)
+  const [isFormDialogOpen, setIsFormDialogOpen] = useState(false)
+  const [editingRecord, setEditingRecord] = useState<Record | null>(null)
   const { toast } = useToast()
 
   const fetchRecords = useCallback(async () => {
@@ -52,30 +70,55 @@ export default function RecordsDashboard() {
     fetchRecords()
   }, [fetchRecords])
 
-  const handleAddLesson = async (newLessonData: any) => {
+  // --- Функции для добавления/редактирования ---
+  const handleOpenAddDialog = () => {
+    setEditingRecord(null) // Сбросить редактируемую запись
+    setIsFormDialogOpen(true)
+  }
+
+  const handleOpenEditDialog = (record: Record) => {
+    setEditingRecord(record)
+    setIsFormDialogOpen(true)
+  }
+
+  const handleFormSubmit = async (data: any, id?: string) => {
     try {
-      const response = await fetch("/api/records", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newLessonData),
-      })
-      if (!response.ok) {
-        throw new Error("Failed to add lesson")
+      let response
+      if (id) {
+        // Редактирование
+        response = await fetch("/api/records", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ _id: id, ...data }),
+        })
+      } else {
+        // Добавление
+        response = await fetch("/api/records", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        })
       }
-      const addedRecord = await response.json()
-      setRecords((prevRecords) => [...prevRecords, addedRecord])
+
+      if (!response.ok) {
+        throw new Error(id ? "Failed to update record" : "Failed to add record")
+      }
+
+      await fetchRecords() // Перезагрузить данные после изменения
       toast({
         title: "Успех!",
-        description: "Занятие успешно добавлено.",
+        description: id ? "Запись успешно обновлена." : "Занятие успешно добавлено.",
       })
-      setIsAddLessonDialogOpen(false)
+      setIsFormDialogOpen(false)
     } catch (error) {
-      console.error("Error adding lesson:", error)
+      console.error("Error submitting form:", error)
       toast({
         title: "Ошибка",
-        description: "Не удалось добавить занятие.",
+        description: id ? "Не удалось обновить запись." : "Не удалось добавить занятие.",
         variant: "destructive",
       })
     }
@@ -89,13 +132,62 @@ export default function RecordsDashboard() {
     setSortOrder("asc")
   }
 
+  // --- Функции для уведомлений ---
+  const requestNotificationPermission = useCallback(() => {
+    if ("Notification" in window) {
+      Notification.requestPermission().then((permission) => {
+        if (permission === "granted") {
+          console.log("Разрешение на уведомления получено.")
+        } else {
+          console.warn("Разрешение на уведомления отклонено.")
+        }
+      })
+    }
+  }, [])
+
+  const checkAndSendNotifications = useCallback(() => {
+    if (!("Notification" in window) || Notification.permission !== "granted") {
+      return // Уведомления не поддерживаются или разрешение не дано
+    }
+
+    const notifiedEvents = JSON.parse(localStorage.getItem("notifiedEvents") || "[]")
+    const now = new Date()
+    const fiveDaysFromNow = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000)
+
+    records.forEach((record) => {
+      const eventDate = new Date(record.date)
+      // Проверяем, что событие активно, еще не завершено, и находится в пределах 5 дней
+      if (
+        record.status === "active" &&
+        eventDate > now &&
+        eventDate <= fiveDaysFromNow &&
+        !notifiedEvents.includes(record._id)
+      ) {
+        new Notification(`Предстоящее событие: ${record.title || record.name || "Событие"}`, {
+          body: `Начнется ${new Date(record.date).toLocaleString()} (${record.category}).`,
+          icon: "/placeholder.svg?height=64&width=64", // Иконка для уведомления
+        })
+        notifiedEvents.push(record._id)
+      }
+    })
+    localStorage.setItem("notifiedEvents", JSON.stringify(notifiedEvents))
+  }, [records])
+
+  useEffect(() => {
+    requestNotificationPermission()
+    // Проверяем уведомления при загрузке данных и затем каждые 5 минут
+    checkAndSendNotifications()
+    const interval = setInterval(checkAndSendNotifications, 5 * 60 * 1000) // Каждые 5 минут
+    return () => clearInterval(interval)
+  }, [requestNotificationPermission, checkAndSendNotifications])
+
   return (
     <div className="container mx-auto py-8 px-4 md:px-6">
       <h1 className="text-3xl font-bold mb-6">Управление Записями</h1>
 
       <div className="flex flex-col md:flex-row gap-4 mb-6 items-center">
         <Input
-          placeholder="Поиск по названию или описанию..."
+          placeholder="Поиск по названию, описанию, имени или email..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1"
@@ -126,7 +218,7 @@ export default function RecordsDashboard() {
         <Button onClick={handleClearFilters} variant="outline">
           Сбросить фильтры
         </Button>
-        <Button onClick={() => setIsAddLessonDialogOpen(true)} className="flex items-center gap-2">
+        <Button onClick={handleOpenAddDialog} className="flex items-center gap-2">
           <PlusCircle className="w-4 h-4" />
           Запланировать занятие
         </Button>
@@ -144,13 +236,15 @@ export default function RecordsDashboard() {
           setSortBy={setSortBy}
           sortOrder={sortOrder}
           setSortOrder={setSortOrder}
+          onEdit={handleOpenEditDialog}
         />
       )}
 
-      <AddLessonDialog
-        isOpen={isAddLessonDialogOpen}
-        onOpenChange={setIsAddLessonDialogOpen}
-        onAddLesson={handleAddLesson}
+      <LessonFormDialog
+        isOpen={isFormDialogOpen}
+        onOpenChange={setIsFormDialogOpen}
+        onSubmit={handleFormSubmit}
+        initialData={editingRecord}
       />
     </div>
   )
