@@ -1,41 +1,58 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react" // Добавлен useMemo
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RecordsTable } from "@/components/records-table"
 import { LessonFormDialog } from "@/components/lesson-form-dialog"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, PlusCircle } from "lucide-react"
+import { Loader2, PlusCircle, Table, CalendarDays, Clock, BellOff } from "lucide-react"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { CalendarView } from "@/components/calendar-view"
+import { DayView } from "@/components/day-view"
 
 // Определение типа Record для более строгой типизации
 interface Record {
   _id: string
-  title?: string // Теперь может быть опциональным, если формируется на лету
-  description?: string // Теперь может быть опциональным
+  title?: string
+  description?: string
   status: string
-  category: string
-  date: string
-  participants?: string[] // Теперь может быть опциональным
+  tags: string[] // <-- Изменено: теперь массив тегов
+  date: string // ISO string from DB
+  participants?: string[]
   name?: string
   phone?: string
   email?: string
-  preferredDate?: string // Добавлено
-  preferredTime?: string // Добавлено
+  preferredDate?: string
+  preferredTime?: string
   createdAt?: string
 }
+
+type ViewType = "table" | "calendar" | "day"
 
 export default function RecordsDashboard() {
   const [records, setRecords] = useState<Record[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [selectedTagFilter, setSelectedTagFilter] = useState("all") // <-- Изменено: фильтр по тегу
   const [sortBy, setSortBy] = useState("date")
   const [sortOrder, setSortOrder] = useState("asc")
   const [loading, setLoading] = useState(true)
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false)
   const [editingRecord, setEditingRecord] = useState<Record | null>(null)
+  const [recordToDelete, setRecordToDelete] = useState<string | null>(null)
+  const [currentView, setCurrentView] = useState<ViewType>("table")
   const { toast } = useToast()
 
   const fetchRecords = useCallback(async () => {
@@ -44,7 +61,7 @@ export default function RecordsDashboard() {
       const params = new URLSearchParams({
         search: searchQuery,
         status: statusFilter,
-        category: categoryFilter,
+        tag: selectedTagFilter, // <-- Изменено: передаем выбранный тег
         sortBy: sortBy,
         sortOrder: sortOrder,
       }).toString()
@@ -64,15 +81,24 @@ export default function RecordsDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [searchQuery, statusFilter, categoryFilter, sortBy, sortOrder, toast])
+  }, [searchQuery, statusFilter, selectedTagFilter, sortBy, sortOrder, toast]) // <-- Изменено: зависимость от selectedTagFilter
 
   useEffect(() => {
     fetchRecords()
   }, [fetchRecords])
 
+  // Получаем все уникальные теги из текущих записей для фильтра
+  const uniqueTags = useMemo(() => {
+    const tags = new Set<string>()
+    records.forEach((record) => {
+      record.tags.forEach((tag) => tags.add(tag))
+    })
+    return Array.from(tags).sort((a, b) => a.localeCompare(b))
+  }, [records])
+
   // --- Функции для добавления/редактирования ---
   const handleOpenAddDialog = () => {
-    setEditingRecord(null) // Сбросить редактируемую запись
+    setEditingRecord(null)
     setIsFormDialogOpen(true)
   }
 
@@ -85,7 +111,6 @@ export default function RecordsDashboard() {
     try {
       let response
       if (id) {
-        // Редактирование
         response = await fetch("/api/records", {
           method: "PUT",
           headers: {
@@ -94,7 +119,6 @@ export default function RecordsDashboard() {
           body: JSON.stringify({ _id: id, ...data }),
         })
       } else {
-        // Добавление
         response = await fetch("/api/records", {
           method: "POST",
           headers: {
@@ -108,7 +132,7 @@ export default function RecordsDashboard() {
         throw new Error(id ? "Failed to update record" : "Failed to add record")
       }
 
-      await fetchRecords() // Перезагрузить данные после изменения
+      await fetchRecords()
       toast({
         title: "Успех!",
         description: id ? "Запись успешно обновлена." : "Занятие успешно добавлено.",
@@ -124,10 +148,39 @@ export default function RecordsDashboard() {
     }
   }
 
+  // --- Функции для удаления ---
+  const handleDeleteRecord = async () => {
+    if (!recordToDelete) return
+
+    try {
+      const response = await fetch(`/api/records?id=${recordToDelete}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete record")
+      }
+
+      await fetchRecords()
+      toast({
+        title: "Успех!",
+        description: "Запись успешно удалена.",
+      })
+      setRecordToDelete(null)
+    } catch (error) {
+      console.error("Error deleting record:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось удалить запись.",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleClearFilters = () => {
     setSearchQuery("")
     setStatusFilter("all")
-    setCategoryFilter("all")
+    setSelectedTagFilter("all") // <-- Изменено: сброс фильтра тегов
     setSortBy("date")
     setSortOrder("asc")
   }
@@ -147,7 +200,7 @@ export default function RecordsDashboard() {
 
   const checkAndSendNotifications = useCallback(() => {
     if (!("Notification" in window) || Notification.permission !== "granted") {
-      return // Уведомления не поддерживаются или разрешение не дано
+      return
     }
 
     const notifiedEvents = JSON.parse(localStorage.getItem("notifiedEvents") || "[]")
@@ -156,7 +209,6 @@ export default function RecordsDashboard() {
 
     records.forEach((record) => {
       const eventDate = new Date(record.date)
-      // Проверяем, что событие активно, еще не завершено, и находится в пределах 5 дней
       if (
         record.status === "active" &&
         eventDate > now &&
@@ -164,8 +216,8 @@ export default function RecordsDashboard() {
         !notifiedEvents.includes(record._id)
       ) {
         new Notification(`Предстоящее событие: ${record.title || record.name || "Событие"}`, {
-          body: `Начнется ${new Date(record.date).toLocaleString()} (${record.category}).`,
-          icon: "/placeholder.svg?height=64&width=64", // Иконка для уведомления
+          body: `Начнется ${new Date(record.date).toLocaleString()} (${record.tags.join(", ")}).`, // <-- Изменено: теги
+          icon: "/placeholder.svg?height=64&width=64",
         })
         notifiedEvents.push(record._id)
       }
@@ -173,11 +225,18 @@ export default function RecordsDashboard() {
     localStorage.setItem("notifiedEvents", JSON.stringify(notifiedEvents))
   }, [records])
 
+  const handleClearNotifications = () => {
+    localStorage.removeItem("notifiedEvents")
+    toast({
+      title: "Уведомления сброшены",
+      description: "История отправленных уведомлений очищена.",
+    })
+  }
+
   useEffect(() => {
     requestNotificationPermission()
-    // Проверяем уведомления при загрузке данных и затем каждые 5 минут
     checkAndSendNotifications()
-    const interval = setInterval(checkAndSendNotifications, 5 * 60 * 1000) // Каждые 5 минут
+    const interval = setInterval(checkAndSendNotifications, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [requestNotificationPermission, checkAndSendNotifications])
 
@@ -187,7 +246,7 @@ export default function RecordsDashboard() {
 
       <div className="flex flex-col md:flex-row gap-4 mb-6 items-center">
         <Input
-          placeholder="Поиск по названию, описанию, имени или email..."
+          placeholder="Поиск по названию, описанию, имени, email или тегам..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1"
@@ -203,16 +262,17 @@ export default function RecordsDashboard() {
             <SelectItem value="completed">Завершенные</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        <Select value={selectedTagFilter} onValueChange={setSelectedTagFilter}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Фильтр по категории" />
+            <SelectValue placeholder="Фильтр по тегу" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Все категории</SelectItem>
-            <SelectItem value="Lecture">Лекция</SelectItem>
-            <SelectItem value="Workshop">Практикум</SelectItem>
-            <SelectItem value="Meeting">Встреча</SelectItem>
-            <SelectItem value="Appointment">Запись</SelectItem>
+            <SelectItem value="all">Все теги</SelectItem>
+            {uniqueTags.map((tag) => (
+              <SelectItem key={tag} value={tag}>
+                {tag}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Button onClick={handleClearFilters} variant="outline">
@@ -222,6 +282,28 @@ export default function RecordsDashboard() {
           <PlusCircle className="w-4 h-4" />
           Запланировать занятие
         </Button>
+        <Button onClick={handleClearNotifications} variant="outline" className="flex items-center gap-2 bg-transparent">
+          <BellOff className="w-4 h-4" />
+          Сбросить уведомления
+        </Button>
+      </div>
+
+      <div className="flex justify-center mb-6">
+        <ToggleGroup
+          type="single"
+          value={currentView}
+          onValueChange={(value: ViewType) => value && setCurrentView(value)}
+        >
+          <ToggleGroupItem value="table" aria-label="Вид таблицы">
+            <Table className="h-4 w-4 mr-2" /> Таблица
+          </ToggleGroupItem>
+          <ToggleGroupItem value="day" aria-label="Вид по дням">
+            <Clock className="h-4 w-4 mr-2" /> Сегодня
+          </ToggleGroupItem>
+          <ToggleGroupItem value="calendar" aria-label="Вид календаря">
+            <CalendarDays className="h-4 w-4 mr-2" /> Календарь
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {loading ? (
@@ -230,14 +312,21 @@ export default function RecordsDashboard() {
           <span className="ml-2">Загрузка данных...</span>
         </div>
       ) : (
-        <RecordsTable
-          records={records}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          onEdit={handleOpenEditDialog}
-        />
+        <>
+          {currentView === "table" && (
+            <RecordsTable
+              records={records}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              sortOrder={sortOrder}
+              setSortOrder={setSortOrder}
+              onEdit={handleOpenEditDialog}
+              onDelete={(id) => setRecordToDelete(id)}
+            />
+          )}
+          {currentView === "day" && <DayView records={records} onEdit={handleOpenEditDialog} />}
+          {currentView === "calendar" && <CalendarView records={records} onEdit={handleOpenEditDialog} />}
+        </>
       )}
 
       <LessonFormDialog
@@ -246,6 +335,21 @@ export default function RecordsDashboard() {
         onSubmit={handleFormSubmit}
         initialData={editingRecord}
       />
+
+      <AlertDialog open={!!recordToDelete} onOpenChange={(open) => !open && setRecordToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Вы уверены, что хотите удалить эту запись?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Это действие нельзя отменить. Запись будет безвозвратно удалена из базы данных.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteRecord}>Удалить</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

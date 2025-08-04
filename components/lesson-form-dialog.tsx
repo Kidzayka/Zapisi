@@ -22,14 +22,14 @@ interface RecordData {
   title?: string
   description?: string
   status?: string
-  category?: string
+  tags?: string[] // <-- Изменено: теперь массив тегов
   date?: string
   participants?: string[]
   name?: string
   phone?: string
   email?: string
-  preferredDate?: string // Добавлено
-  preferredTime?: string // Добавлено
+  preferredDate?: string
+  preferredTime?: string
   createdAt?: string
 }
 
@@ -46,7 +46,7 @@ export function LessonFormDialog({ isOpen, onOpenChange, onSubmit, initialData }
   const [description, setDescription] = useState(initialData?.description || "")
   const [date, setDate] = useState("")
   const [time, setTime] = useState("")
-  const [category, setCategory] = useState(initialData?.category || "Appointment") // По умолчанию "Appointment"
+  const [tags, setTags] = useState(initialData?.tags?.join(", ") || "Appointment") // <-- Изменено: теги
   const [participants, setParticipants] = useState(initialData?.participants?.join(", ") || "")
   const [name, setName] = useState(initialData?.name || "")
   const [phone, setPhone] = useState(initialData?.phone || "")
@@ -58,15 +58,13 @@ export function LessonFormDialog({ isOpen, onOpenChange, onSubmit, initialData }
       setId(initialData._id)
       setTitle(initialData.title || "")
       setDescription(initialData.description || "")
-      setCategory(initialData.category || "Appointment")
+      setTags(initialData.tags?.join(", ") || "Appointment") // <-- Изменено: теги
       setParticipants(initialData.participants?.join(", ") || "")
       setName(initialData.name || "")
       setPhone(initialData.phone || "")
       setEmail(initialData.email || "")
       setStatus(initialData.status || "active")
 
-      // Форматируем дату и время для полей input type="date" и "time"
-      // Приоритет: preferredDate/preferredTime, затем date
       let d: Date | null = null
       if (initialData.preferredDate && initialData.preferredTime) {
         const datePart = new Date(initialData.preferredDate).toISOString().split("T")[0]
@@ -76,20 +74,19 @@ export function LessonFormDialog({ isOpen, onOpenChange, onSubmit, initialData }
       }
 
       if (d) {
-        setDate(d.toISOString().split("T")[0]) // YYYY-MM-DD
-        setTime(d.toTimeString().split(" ")[0].substring(0, 5)) // HH:MM
+        setDate(d.toISOString().split("T")[0])
+        setTime(d.toTimeString().split(" ")[0].substring(0, 5))
       } else {
         setDate("")
         setTime("")
       }
     } else {
-      // Сброс формы при открытии для добавления
       setId(undefined)
       setTitle("")
       setDescription("")
       setDate("")
       setTime("")
-      setCategory("Appointment") // По умолчанию "Appointment"
+      setTags("Appointment") // <-- Изменено: теги по умолчанию
       setParticipants("")
       setName("")
       setPhone("")
@@ -100,15 +97,14 @@ export function LessonFormDialog({ isOpen, onOpenChange, onSubmit, initialData }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // preferredDate и preferredTime отправляются как есть,
-    // а date будет сформирован на сервере из них.
-    // Если preferredDate/Time не заполнены, но date/time заполнены,
-    // то date будет сформирован из date/time полей формы.
     const dataToSend: RecordData = {
       title,
       description,
       status,
-      category,
+      tags: tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean), // <-- Изменено: парсим теги
       participants: participants
         .split(",")
         .map((p) => p.trim())
@@ -118,11 +114,9 @@ export function LessonFormDialog({ isOpen, onOpenChange, onSubmit, initialData }
       email,
     }
 
-    // Если поля даты/времени заполнены, отправляем их для формирования 'date' на сервере
     if (date && time) {
-      dataToSend.preferredDate = date // Отправляем как string YYYY-MM-DD
-      dataToSend.preferredTime = time // Отправляем как string HH:MM
-      // dataToSend.date = `${date}T${time}:00Z`; // Можно отправить и так, но серверная логика уже это делает
+      dataToSend.preferredDate = date
+      dataToSend.preferredTime = time
     }
 
     onSubmit(dataToSend, id)
@@ -149,7 +143,7 @@ export function LessonFormDialog({ isOpen, onOpenChange, onSubmit, initialData }
               onChange={(e) => setName(e.target.value)}
               placeholder="Имя клиента"
               className="col-span-3"
-              required // Сделаем имя обязательным, так как оно часто используется для title/participants
+              required
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -204,20 +198,16 @@ export function LessonFormDialog({ isOpen, onOpenChange, onSubmit, initialData }
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="category" className="text-right">
-              Категория
+            <Label htmlFor="tags" className="text-right">
+              Теги
             </Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="col-span-3">
-                <SelectValue placeholder="Выберите категорию" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Lecture">Лекция</SelectItem>
-                <SelectItem value="Workshop">Практикум</SelectItem>
-                <SelectItem value="Meeting">Встреча</SelectItem>
-                <SelectItem value="Appointment">Запись</SelectItem>
-              </SelectContent>
-            </Select>
+            <Textarea
+              id="tags"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="Например: логопедия, чтение, дислексия"
+              className="col-span-3"
+            />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="status" className="text-right">
@@ -234,8 +224,6 @@ export function LessonFormDialog({ isOpen, onOpenChange, onSubmit, initialData }
               </SelectContent>
             </Select>
           </div>
-          {/* Поля title, description, participants сделаем опциональными в форме,
-              так как они могут формироваться автоматически */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="title" className="text-right">
               Название (авто)

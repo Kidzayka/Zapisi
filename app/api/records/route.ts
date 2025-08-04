@@ -12,11 +12,11 @@ const recordSchema = new mongoose.Schema(
     preferredTime: { type: String }, // Время из ваших данных
     createdAt: { type: Date, default: Date.now },
 
-    // Поля, которые используются в UI и могут быть сформированы из вышеуказанных
+    // Поля, которые используются в UI и могут быть сформированы из вышеууказанных
     title: { type: String }, // Будет формироваться из name
     description: { type: String }, // Будет формироваться из phone, email
     status: { type: String, enum: ["active", "pending", "completed"], default: "active" },
-    category: { type: String, default: "Appointment" }, // По умолчанию "Appointment"
+    tags: { type: [String], default: [] }, // <-- Изменено: теперь массив тегов
     date: { type: Date }, // Комбинированное поле для сортировки и отображения
     participants: { type: [String], default: [] }, // Будет формироваться из name
   },
@@ -64,7 +64,7 @@ const processRecordData = (data: any) => {
   // Если title не предоставлен, используем name
   if (!data.title && data.name) {
     data.title = `Запись для ${data.name}`
-  } else if (!data.title && data.category === "Appointment") {
+  } else if (!data.title && data.tags && data.tags.includes("Appointment")) {
     data.title = "Новая запись" // Заголовок по умолчанию для Appointment
   }
 
@@ -83,9 +83,9 @@ const processRecordData = (data: any) => {
     }
   }
 
-  // Устанавливаем категорию по умолчанию, если не указана
-  if (!data.category) {
-    data.category = "Appointment"
+  // Устанавливаем тег "Appointment" по умолчанию, если теги не указаны
+  if (!data.tags || data.tags.length === 0) {
+    data.tags = ["Appointment"]
   }
 
   return data
@@ -98,7 +98,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
     const status = searchParams.get("status") || ""
-    const category = searchParams.get("category") || ""
+    const tag = searchParams.get("tag") || "" // <-- Изменено: фильтр по тегу
     const sortBy = searchParams.get("sortBy") || "date"
     const sortOrder = searchParams.get("sortOrder") || "asc"
 
@@ -109,13 +109,14 @@ export async function GET(request: Request) {
         { description: { $regex: search, $options: "i" } },
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
+        { tags: { $regex: search, $options: "i" } }, // <-- Добавлено: поиск по тегам
       ]
     }
     if (status && status !== "all") {
       query.status = status
     }
-    if (category && category !== "all") {
-      query.category = category
+    if (tag && tag !== "all") {
+      query.tags = tag // <-- Изменено: фильтрация по тегу
     }
 
     const sortOptions: any = {}
@@ -165,6 +166,29 @@ export async function PUT(request: Request) {
     return NextResponse.json(updatedRecord)
   } catch (error) {
     console.error("Ошибка при обновлении записи:", error)
+    return NextResponse.json({ message: "Ошибка сервера" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    await connectDB()
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
+
+    if (!id) {
+      return NextResponse.json({ message: "ID записи не предоставлен для удаления." }, { status: 400 })
+    }
+
+    const deletedRecord = await Record.findByIdAndDelete(id)
+
+    if (!deletedRecord) {
+      return NextResponse.json({ message: "Запись не найдена." }, { status: 404 })
+    }
+
+    return NextResponse.json({ message: "Запись успешно удалена." }, { status: 200 })
+  } catch (error) {
+    console.error("Ошибка при удалении записи:", error)
     return NextResponse.json({ message: "Ошибка сервера" }, { status: 500 })
   }
 }

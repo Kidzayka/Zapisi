@@ -1,20 +1,21 @@
 "use client"
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ArrowUpDown, Edit } from "lucide-react"
+import { ArrowUpDown, Edit, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge" // Импортируем Badge
 
 interface Record {
   _id: string
-  title?: string // Может быть опциональным
-  description?: string // Может быть опциональным
+  title?: string
+  description?: string
   status: string
-  category: string
+  tags: string[] // <-- Изменено: теперь массив тегов
   date: string
-  participants?: string[] // Может быть опциональным
-  name?: string // Добавлено
-  phone?: string // Добавлено
-  email?: string // Добавлено
+  participants?: string[]
+  name?: string
+  phone?: string
+  email?: string
   preferredDate?: string
   preferredTime?: string
   createdAt?: string
@@ -27,9 +28,18 @@ interface RecordsTableProps {
   sortOrder: string
   setSortOrder: (order: string) => void
   onEdit: (record: Record) => void
+  onDelete: (id: string) => void
 }
 
-export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrder, onEdit }: RecordsTableProps) {
+export function RecordsTable({
+  records,
+  sortBy,
+  setSortBy,
+  sortOrder,
+  setSortOrder,
+  onEdit,
+  onDelete,
+}: RecordsTableProps) {
   const handleSort = (key: string) => {
     if (sortBy === key) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc")
@@ -65,8 +75,8 @@ export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrd
               </Button>
             </TableHead>
             <TableHead>
-              <Button variant="ghost" onClick={() => handleSort("category")} className="px-0">
-                Категория {getSortIcon("category")}
+              <Button variant="ghost" onClick={() => handleSort("tags")} className="px-0">
+                Теги {getSortIcon("tags")} {/* <-- Изменено: теперь теги */}
                 <ArrowUpDown className="ml-2 h-4 w-4" />
               </Button>
             </TableHead>
@@ -79,7 +89,7 @@ export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrd
             <TableHead>Участники</TableHead>
             <TableHead>Телефон</TableHead>
             <TableHead>Email</TableHead>
-            <TableHead className="w-[80px] text-right">Действия</TableHead>
+            <TableHead className="w-[120px] text-right">Действия</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -107,15 +117,28 @@ export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrd
                     {record.status === "active" ? "Активно" : record.status === "pending" ? "Ожидает" : "Завершено"}
                   </span>
                 </TableCell>
-                <TableCell>{record.category}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {record.tags.map((tag) => (
+                      <Badge key={tag} variant="secondary">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>{" "}
+                {/* <-- Изменено: отображение тегов */}
                 <TableCell>{new Date(record.date).toLocaleString()}</TableCell>
                 <TableCell>{record.participants?.join(", ") || record.name || "N/A"}</TableCell>
                 <TableCell>{record.phone || "N/A"}</TableCell>
                 <TableCell>{record.email || "N/A"}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right flex gap-1 justify-end">
                   <Button variant="ghost" size="icon" onClick={() => onEdit(record)}>
                     <Edit className="h-4 w-4" />
                     <span className="sr-only">Редактировать</span>
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => onDelete(record._id)}>
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                    <span className="sr-only">Удалить</span>
                   </Button>
                 </TableCell>
               </TableRow>
