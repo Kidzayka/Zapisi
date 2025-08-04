@@ -30,10 +30,14 @@ export function AddLessonDialog({ isOpen, onOpenChange, onAddLesson }: AddLesson
   const [time, setTime] = useState("")
   const [category, setCategory] = useState("Lecture")
   const [participants, setParticipants] = useState("")
+  const [name, setName] = useState("") // Новое поле
+  const [phone, setPhone] = useState("") // Новое поле
+  const [email, setEmail] = useState("") // Новое поле
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const fullDateTime = `${date}T${time}:00Z` // Формат ISO 8601
+
     onAddLesson({
       title,
       description,
@@ -44,6 +48,9 @@ export function AddLessonDialog({ isOpen, onOpenChange, onAddLesson }: AddLesson
         .split(",")
         .map((p) => p.trim())
         .filter(Boolean),
+      name, // Передаем новые поля
+      phone,
+      email,
     })
     // Сброс формы
     setTitle("")
@@ -52,6 +59,9 @@ export function AddLessonDialog({ isOpen, onOpenChange, onAddLesson }: AddLesson
     setTime("")
     setCategory("Lecture")
     setParticipants("")
+    setName("")
+    setPhone("")
+    setEmail("")
   }
 
   return (
@@ -71,7 +81,7 @@ export function AddLessonDialog({ isOpen, onOpenChange, onAddLesson }: AddLesson
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="col-span-3"
-              required
+              placeholder="Например: Урок по React.js"
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -83,6 +93,7 @@ export function AddLessonDialog({ isOpen, onOpenChange, onAddLesson }: AddLesson
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="col-span-3"
+              placeholder="Например: Введение в основы React и JSX."
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -123,6 +134,7 @@ export function AddLessonDialog({ isOpen, onOpenChange, onAddLesson }: AddLesson
                 <SelectItem value="Lecture">Лекция</SelectItem>
                 <SelectItem value="Workshop">Практикум</SelectItem>
                 <SelectItem value="Meeting">Встреча</SelectItem>
+                <SelectItem value="Appointment">Запись</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -135,6 +147,43 @@ export function AddLessonDialog({ isOpen, onOpenChange, onAddLesson }: AddLesson
               value={participants}
               onChange={(e) => setParticipants(e.target.value)}
               placeholder="Иван, Мария, Петр"
+              className="col-span-3"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="name" className="text-right">
+              Имя (для записи)
+            </Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Имя клиента"
+              className="col-span-3"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="phone" className="text-right">
+              Телефон
+            </Label>
+            <Input
+              id="phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+1234567890"
+              className="col-span-3"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="email" className="text-right">
+              Email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="client@example.com"
               className="col-span-3"
             />
           </div>

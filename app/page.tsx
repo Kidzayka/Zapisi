@@ -120,6 +120,7 @@ export default function RecordsDashboard() {
             <SelectItem value="Lecture">Лекция</SelectItem>
             <SelectItem value="Workshop">Практикум</SelectItem>
             <SelectItem value="Meeting">Встреча</SelectItem>
+            <SelectItem value="Appointment">Запись</SelectItem>
           </SelectContent>
         </Select>
         <Button onClick={handleClearFilters} variant="outline">

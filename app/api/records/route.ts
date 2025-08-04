@@ -1,143 +1,130 @@
 import { NextResponse } from "next/server"
+import mongoose from "mongoose"
 
-// Имитация данных из MongoDB
-// В реальном приложении здесь будет подключение к вашей MongoDB
-// Например, с использованием mongoose:
-// import mongoose from 'mongoose';
-// import Record from '@/models/Record'; // Ваш Mongoose-модель
+// Определяем схему для записи
+const recordSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String },
+  status: { type: String, enum: ["active", "pending", "completed"], default: "active" },
+  category: { type: String, required: true },
+  date: { type: Date, required: true },
+  participants: { type: [String], default: [] },
+  // Добавляем поля из вашего примера данных
+  name: { type: String },
+  phone: { type: String },
+  email: { type: String },
+  preferredDate: { type: Date },
+  preferredTime: { type: String },
+  createdAt: { type: Date, default: Date.now },
+})
 
-const mockRecords = [
-  {
-    _id: "rec1",
-    title: "Урок по React.js",
-    description: "Введение в основы React и JSX.",
-    status: "active",
-    category: "Lecture",
-    date: "2025-08-10T10:00:00Z",
-    participants: ["Иван", "Мария"],
-  },
-  {
-    _id: "rec2",
-    title: "Практикум по Node.js",
-    description: "Создание REST API с Express.",
-    status: "active",
-    category: "Workshop",
-    date: "2025-08-12T14:30:00Z",
-    participants: ["Петр", "Анна", "Сергей"],
-  },
-  {
-    _id: "rec3",
-    title: 'Встреча по проекту "Vercel"',
-    description: "Обсуждение прогресса и следующих шагов.",
-    status: "pending",
-    category: "Meeting",
-    date: "2025-08-15T09:00:00Z",
-    participants: ["Елена", "Дмитрий"],
-  },
-  {
-    _id: "rec4",
-    title: "Семинар по Tailwind CSS",
-    description: "Быстрая разработка UI с Tailwind.",
-    status: "completed",
-    category: "Lecture",
-    date: "2025-08-05T11:00:00Z",
-    participants: ["Ольга", "Николай"],
-  },
-  {
-    _id: "rec5",
-    title: "Консультация по Next.js",
-    description: "Вопросы и ответы по App Router.",
-    status: "active",
-    category: "Meeting",
-    date: "2025-08-18T16:00:00Z",
-    participants: ["Алексей"],
-  },
-]
+// Создаем модель, если она еще не существует
+const Record = mongoose.models.Record || mongoose.model("Record", recordSchema)
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const search = searchParams.get("search") || ""
-  const status = searchParams.get("status") || ""
-  const category = searchParams.get("category") || ""
-  const sortBy = searchParams.get("sortBy") || "date"
-  const sortOrder = searchParams.get("sortOrder") || "asc"
+let isConnected = false
 
-  const filteredRecords = mockRecords.filter((record) => {
-    const matchesSearch = search
-      ? record.title.toLowerCase().includes(search.toLowerCase()) ||
-        record.description.toLowerCase().includes(search.toLowerCase())
-      : true
-    const matchesStatus = status ? record.status === status : true
-    const matchesCategory = category ? record.category === category : true
-    return matchesSearch && matchesStatus && matchesCategory
-  })
-
-  filteredRecords.sort((a, b) => {
-    let valA: string | number = ""
-    let valB: string | number = ""
-
-    if (sortBy === "date") {
-      valA = new Date(a.date).getTime()
-      valB = new Date(b.date).getTime()
-    } else if (sortBy === "title") {
-      valA = a.title.toLowerCase()
-      valB = b.title.toLowerCase()
-    } else if (sortBy === "status") {
-      valA = a.status.toLowerCase()
-      valB = b.status.toLowerCase()
-    } else if (sortBy === "category") {
-      valA = a.category.toLowerCase()
-      valB = b.category.toLowerCase()
-    }
-
-    if (valA < valB) return sortOrder === "asc" ? -1 : 1
-    if (valA > valB) return sortOrder === "asc" ? 1 : -1
-    return 0
-  })
-
-  return NextResponse.json(filteredRecords)
-}
-
-export async function POST(request: Request) {
-  const newRecord = await request.json()
-  newRecord._id = `rec${mockRecords.length + 1}` // Простой ID для имитации
-  mockRecords.push(newRecord)
-  return NextResponse.json(newRecord, { status: 201 })
-}
-
-// В реальном приложении, для подключения к MongoDB:
-/*
-// Пример подключения к MongoDB с Mongoose
-let isConnected = false;
 const connectDB = async () => {
   if (isConnected) {
-    console.log('Using existing database connection');
-    return;
+    console.log("Используется существующее подключение к базе данных.")
+    return
   }
+
+  if (!process.env.MONGODB_URI) {
+    throw new Error("Переменная окружения MONGODB_URI не установлена.")
+  }
+
   try {
-    await mongoose.connect(process.env.MONGODB_URI!, {
-      dbName: 'your_database_name', // Замените на имя вашей БД
-    });
-    isConnected = true;
-    console.log('MongoDB Connected');
+    await mongoose.connect(process.env.MONGODB_URI, {
+      dbName: "records_db", // Вы можете изменить имя вашей базы данных здесь
+    })
+    isConnected = true
+    console.log("MongoDB подключена.")
   } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
+    console.error("Ошибка подключения к MongoDB:", error)
+    throw new Error("Не удалось подключиться к базе данных.")
   }
-};
+}
 
-// Пример использования в GET
 export async function GET(request: Request) {
-  await connectDB();
-  // const records = await Record.find({}); // Получение данных из реальной БД
-  // return NextResponse.json(records);
+  try {
+    await connectDB()
+
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get("search") || ""
+    const status = searchParams.get("status") || ""
+    const category = searchParams.get("category") || ""
+    const sortBy = searchParams.get("sortBy") || "date"
+    const sortOrder = searchParams.get("sortOrder") || "asc"
+
+    const query: any = {}
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { name: { $regex: search, $options: "i" } }, // Добавляем поиск по имени
+        { email: { $regex: search, $options: "i" } }, // Добавляем поиск по email
+      ]
+    }
+    if (status && status !== "all") {
+      query.status = status
+    }
+    if (category && category !== "all") {
+      query.category = category
+    }
+
+    const sortOptions: any = {}
+    sortOptions[sortBy] = sortOrder === "asc" ? 1 : -1
+
+    const records = await Record.find(query).sort(sortOptions)
+
+    return NextResponse.json(records)
+  } catch (error) {
+    console.error("Ошибка при получении записей:", error)
+    return NextResponse.json({ message: "Ошибка сервера" }, { status: 500 })
+  }
 }
 
-// Пример использования в POST
 export async function POST(request: Request) {
-  await connectDB();
-  const newRecordData = await request.json();
-  // const newRecord = await Record.create(newRecordData); // Сохранение в реальную БД
-  // return NextResponse.json(newRecord, { status: 201 });
+  try {
+    await connectDB()
+    const newRecordData = await request.json()
+
+    // Преобразуем preferredDate и preferredTime в одно поле date, если они есть
+    if (newRecordData.preferredDate && newRecordData.preferredTime) {
+      const datePart = newRecordData.preferredDate.split("T")[0] // "2025-08-07"
+      const timePart = newRecordData.preferredTime // "17:00"
+      newRecordData.date = new Date(`${datePart}T${timePart}:00Z`)
+      delete newRecordData.preferredDate
+      delete newRecordData.preferredTime
+    } else if (newRecordData.date) {
+      // Если date уже в правильном формате, используем его
+      newRecordData.date = new Date(newRecordData.date)
+    }
+
+    // Если title не предоставлен, используем name
+    if (!newRecordData.title && newRecordData.name) {
+      newRecordData.title = `Запись для ${newRecordData.name}`
+    }
+
+    // Если description не предоставлен, формируем его из phone и email
+    if (!newRecordData.description) {
+      const desc = []
+      if (newRecordData.phone) desc.push(`Телефон: ${newRecordData.phone}`)
+      if (newRecordData.email) desc.push(`Email: ${newRecordData.email}`)
+      newRecordData.description = desc.join(", ")
+    }
+
+    // Если participants не предоставлены, используем name
+    if (!newRecordData.participants || newRecordData.participants.length === 0) {
+      if (newRecordData.name) {
+        newRecordData.participants = [newRecordData.name]
+      }
+    }
+
+    const newRecord = await Record.create(newRecordData)
+    return NextResponse.json(newRecord, { status: 201 })
+  } catch (error) {
+    console.error("Ошибка при добавлении записи:", error)
+    return NextResponse.json({ message: "Ошибка сервера" }, { status: 500 })
+  }
 }
-*/

@@ -12,6 +12,13 @@ interface Record {
   category: string
   date: string
   participants: string[]
+  // Добавляем новые поля, которые могут прийти из БД
+  name?: string
+  phone?: string
+  email?: string
+  preferredDate?: string
+  preferredTime?: string
+  createdAt?: string
 }
 
 interface RecordsTableProps {
@@ -70,12 +77,14 @@ export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrd
               </Button>
             </TableHead>
             <TableHead>Участники</TableHead>
+            <TableHead>Телефон</TableHead> {/* Добавляем столбец для телефона */}
+            <TableHead>Email</TableHead> {/* Добавляем столбец для email */}
           </TableRow>
         </TableHeader>
         <TableBody>
           {records.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center">
+              <TableCell colSpan={8} className="h-24 text-center">
                 Записи не найдены.
               </TableCell>
             </TableRow>
@@ -99,7 +108,9 @@ export function RecordsTable({ records, sortBy, setSortBy, sortOrder, setSortOrd
                 </TableCell>
                 <TableCell>{record.category}</TableCell>
                 <TableCell>{new Date(record.date).toLocaleString()}</TableCell>
-                <TableCell>{record.participants.join(", ")}</TableCell>
+                <TableCell>{record.participants?.join(", ") || record.name || "N/A"}</TableCell>
+                <TableCell>{record.phone || "N/A"}</TableCell> {/* Отображаем телефон */}
+                <TableCell>{record.email || "N/A"}</TableCell> {/* Отображаем email */}
               </TableRow>
             ))
           )}
