@@ -124,7 +124,14 @@ export async function GET(request: Request) {
 
     const records = await Record.find(query).sort(sortOptions)
 
-    return NextResponse.json(records)
+    // Добавьте следующий код, чтобы гарантировать, что 'tags' всегда является массивом
+    const processedRecords = records.map((record) => ({
+      ...record.toObject(), // Преобразуем документ Mongoose в обычный объект JavaScript
+      tags: record.tags || [], // Убедимся, что tags - это массив, по умолчанию пустой, если null/undefined
+    }))
+
+    // Замените `return NextResponse.json(records)` на:
+    return NextResponse.json(processedRecords)
   } catch (error) {
     console.error("Ошибка при получении записей:", error)
     return NextResponse.json({ message: "Ошибка сервера" }, { status: 500 })

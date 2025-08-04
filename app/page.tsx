@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react" // Добавлен useMemo
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RecordsTable } from "@/components/records-table"
 import { LessonFormDialog } from "@/components/lesson-form-dialog"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, PlusCircle, Table, CalendarDays, Clock, BellOff } from "lucide-react"
+import { Loader2, PlusCircle, Table, CalendarDays, Clock, BellOff, Repeat, Sun, Moon } from "lucide-react" // Добавлены Sun, Moon icons
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   AlertDialog,
@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { CalendarView } from "@/components/calendar-view"
 import { DayView } from "@/components/day-view"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch" // Импортируем Switch
 
 // Определение типа Record для более строгой типизации
 interface Record {
@@ -28,7 +30,7 @@ interface Record {
   title?: string
   description?: string
   status: string
-  tags: string[] // <-- Изменено: теперь массив тегов
+  tags: string[]
   date: string // ISO string from DB
   participants?: string[]
   name?: string
@@ -45,7 +47,7 @@ export default function RecordsDashboard() {
   const [records, setRecords] = useState<Record[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [selectedTagFilter, setSelectedTagFilter] = useState("all") // <-- Изменено: фильтр по тегу
+  const [selectedTagFilter, setSelectedTagFilter] = useState("all")
   const [sortBy, setSortBy] = useState("date")
   const [sortOrder, setSortOrder] = useState("asc")
   const [loading, setLoading] = useState(true)
@@ -55,13 +57,27 @@ export default function RecordsDashboard() {
   const [currentView, setCurrentView] = useState<ViewType>("table")
   const { toast } = useToast()
 
+  // Настройки уведомлений
+  const [notificationFrequency, setNotificationFrequency] = useState<number>(
+    () => Number.parseInt(localStorage.getItem("notificationFrequency") || "60") || 60,
+  )
+  const [notificationLeadTime, setNotificationLeadTime] = useState<number>(
+    () => Number.parseInt(localStorage.getItem("notificationLeadTime") || "5") || 5,
+  )
+  const [enableRepeatingNotifications, setEnableRepeatingNotifications] = useState<boolean>(
+    () => localStorage.getItem("enableRepeatingNotifications") === "true",
+  )
+
+  // Состояние для темы
+  const [theme, setTheme] = useState<"light" | "dark">("light")
+
   const fetchRecords = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
         search: searchQuery,
         status: statusFilter,
-        tag: selectedTagFilter, // <-- Изменено: передаем выбранный тег
+        tag: selectedTagFilter,
         sortBy: sortBy,
         sortOrder: sortOrder,
       }).toString()
@@ -81,11 +97,24 @@ export default function RecordsDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [searchQuery, statusFilter, selectedTagFilter, sortBy, sortOrder, toast]) // <-- Изменено: зависимость от selectedTagFilter
+  }, [searchQuery, statusFilter, selectedTagFilter, sortBy, sortOrder, toast])
 
   useEffect(() => {
     fetchRecords()
   }, [fetchRecords])
+
+  // Сохраняем настройки уведомлений и темы в localStorage
+  useEffect(() => {
+    localStorage.setItem("notificationFrequency", String(notificationFrequency))
+    localStorage.setItem("notificationLeadTime", String(notificationLeadTime))
+    localStorage.setItem("enableRepeatingNotifications", String(enableRepeatingNotifications))
+  }, [notificationFrequency, notificationLeadTime, enableRepeatingNotifications])
+
+  // Применяем тему к элементу <html>
+  useEffect(() => {
+    document.documentElement.classList.remove("light", "dark")
+    document.documentElement.classList.add(theme)
+  }, [theme])
 
   // Получаем все уникальные теги из текущих записей для фильтра
   const uniqueTags = useMemo(() => {
@@ -180,7 +209,7 @@ export default function RecordsDashboard() {
   const handleClearFilters = () => {
     setSearchQuery("")
     setStatusFilter("all")
-    setSelectedTagFilter("all") // <-- Изменено: сброс фильтра тегов
+    setSelectedTagFilter("all")
     setSortBy("date")
     setSortOrder("asc")
   }
@@ -203,27 +232,38 @@ export default function RecordsDashboard() {
       return
     }
 
-    const notifiedEvents = JSON.parse(localStorage.getItem("notifiedEvents") || "[]")
-    const now = new Date()
-    const fiveDaysFromNow = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000)
+    const notifiedEvents: Record<string, number> = JSON.parse(localStorage.getItem("notifiedEvents") || "{}")
+    const now = Date.now()
+    const leadTimeMs = notificationLeadTime * 24 * 60 * 60 * 1000 // Время до события в миллисекундах
+    const notificationIntervalMs = notificationFrequency * 60 * 1000 // Периодичность в миллисекундах
 
     records.forEach((record) => {
-      const eventDate = new Date(record.date)
-      if (
-        record.status === "active" &&
-        eventDate > now &&
-        eventDate <= fiveDaysFromNow &&
-        !notifiedEvents.includes(record._id)
-      ) {
-        new Notification(`Предстоящее событие: ${record.title || record.name || "Событие"}`, {
-          body: `Начнется ${new Date(record.date).toLocaleString()} (${record.tags.join(", ")}).`, // <-- Изменено: теги
-          icon: "/placeholder.svg?height=64&width=64",
-        })
-        notifiedEvents.push(record._id)
+      const eventDateMs = new Date(record.date).getTime()
+
+      // Проверяем, что событие активно, еще не завершено, и находится в пределах заданного времени до события
+      if (record.status === "active" && eventDateMs > now && eventDateMs <= now + leadTimeMs) {
+        const lastNotified = notifiedEvents[record._id] || 0
+
+        let shouldNotify = false
+        if (enableRepeatingNotifications) {
+          // Если повтор включен, уведомляем, если прошло достаточно времени с последнего уведомления
+          shouldNotify = now - lastNotified >= notificationIntervalMs
+        } else {
+          // Если повтор выключен, уведомляем только если никогда не уведомляли
+          shouldNotify = lastNotified === 0
+        }
+
+        if (shouldNotify) {
+          new Notification(`Предстоящее событие: ${record.title || record.name || "Событие"}`, {
+            body: `Начнется ${new Date(record.date).toLocaleString()} (${record.tags.join(", ")}).`,
+            icon: "/placeholder.svg?height=64&width=64",
+          })
+          notifiedEvents[record._id] = now // Обновляем временную метку
+        }
       }
     })
     localStorage.setItem("notifiedEvents", JSON.stringify(notifiedEvents))
-  }, [records])
+  }, [records, notificationFrequency, notificationLeadTime, enableRepeatingNotifications])
 
   const handleClearNotifications = () => {
     localStorage.removeItem("notifiedEvents")
@@ -236,13 +276,29 @@ export default function RecordsDashboard() {
   useEffect(() => {
     requestNotificationPermission()
     checkAndSendNotifications()
-    const interval = setInterval(checkAndSendNotifications, 5 * 60 * 1000)
+    const interval = setInterval(checkAndSendNotifications, 60 * 1000) // Проверяем каждую минуту
     return () => clearInterval(interval)
   }, [requestNotificationPermission, checkAndSendNotifications])
 
+  // Компонент для переключения темы
+  const ThemeToggle = () => {
+    const toggleTheme = () => {
+      setTheme((prevTheme) => (prevTheme === "light" ? "dark" : "light"))
+    }
+
+    return (
+      <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Переключить тему">
+        {theme === "light" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </Button>
+    )
+  }
+
   return (
     <div className="container mx-auto py-8 px-4 md:px-6">
-      <h1 className="text-3xl font-bold mb-6">Управление Записями</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Управление Записями</h1>
+        <ThemeToggle /> {/* Добавляем переключатель темы */}
+      </div>
 
       <div className="flex flex-col md:flex-row gap-4 mb-6 items-center">
         <Input
@@ -286,6 +342,50 @@ export default function RecordsDashboard() {
           <BellOff className="w-4 h-4" />
           Сбросить уведомления
         </Button>
+      </div>
+
+      {/* Настройки уведомлений */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 border rounded-lg bg-muted/20">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="enable-repeating-notifications" className="whitespace-nowrap flex items-center gap-1">
+            <Repeat className="w-4 h-4" />
+            Повторять уведомления:
+          </Label>
+          <Switch
+            id="enable-repeating-notifications"
+            checked={enableRepeatingNotifications}
+            onCheckedChange={setEnableRepeatingNotifications}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="notification-frequency" className="whitespace-nowrap flex items-center gap-1">
+            <Clock className="w-4 h-4" />
+            Повторять каждые (мин):
+          </Label>
+          <Input
+            id="notification-frequency"
+            type="number"
+            value={notificationFrequency}
+            onChange={(e) => setNotificationFrequency(Math.max(1, Number.parseInt(e.target.value) || 1))}
+            className="w-24"
+            min="1"
+            disabled={!enableRepeatingNotifications} // Отключаем, если повтор выключен
+          />
+        </div>
+        <div className="flex items-center gap-2 col-span-full">
+          <Label htmlFor="notification-lead-time" className="whitespace-nowrap flex items-center gap-1">
+            <CalendarDays className="w-4 h-4" />
+            Показывать за (дней) до события:
+          </Label>
+          <Input
+            id="notification-lead-time"
+            type="number"
+            value={notificationLeadTime}
+            onChange={(e) => setNotificationLeadTime(Math.max(0, Number.parseInt(e.target.value) || 0))}
+            className="w-24"
+            min="0"
+          />
+        </div>
       </div>
 
       <div className="flex justify-center mb-6">
