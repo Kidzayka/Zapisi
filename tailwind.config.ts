@@ -20,7 +20,6 @@ const config = {
     },
     extend: {
       colors: {
-        // Основные цвета для темной фиолетовой темы
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -69,14 +68,80 @@ const config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        blob: {
+          "0%": {
+            transform: "translate(0px, 0px) scale(1)",
+          },
+          "33%": {
+            transform: "translate(30px, -50px) scale(1.1)",
+          },
+          "66%": {
+            transform: "translate(-20px, 20px) scale(0.9)",
+          },
+          "100%": {
+            transform: "translate(0px, 0px) scale(1)",
+          },
+        },
+        shimmer: {
+          "0%": {
+            transform: "translateX(-100%)",
+          },
+          "100%": {
+            transform: "translateX(100%)",
+          },
+        },
+        "gradient-x": {
+          "0%, 100%": {
+            "background-size": "200% 200%",
+            "background-position": "left center",
+          },
+          "50%": {
+            "background-size": "200% 200%",
+            "background-position": "right center",
+          },
+        },
+        wave: {
+          "0%, 100%": { transform: "rotate(0deg)" },
+          "10%, 30%": { transform: "rotate(14deg)" },
+          "20%": { transform: "rotate(-8deg)" },
+          "40%": { transform: "rotate(-4deg)" },
+          "50%": { transform: "rotate(10deg)" },
+          "60%": { transform: "rotate(0deg)" },
+        },
+        wiggle: {
+          "0%, 100%": { transform: "rotate(-3deg)" },
+          "50%": { transform: "rotate(3deg)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        blob: "blob 7s infinite",
+        shimmer: "shimmer 2s linear infinite",
+        "gradient-x": "gradient-x 15s ease infinite",
+        wave: "wave 2.5s ease-in-out infinite",
+        wiggle: "wiggle 1s ease-in-out infinite",
+      },
+      animationDelay: {
+        "2000": "2s",
+        "4000": "4s",
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    ({ addUtilities }: any) => {
+      const newUtilities = {
+        ".animation-delay-2000": {
+          "animation-delay": "2s",
+        },
+        ".animation-delay-4000": {
+          "animation-delay": "4s",
+        },
+      }
+      addUtilities(newUtilities)
+    },
+  ],
 } satisfies Config
 
 export default config
